@@ -8,6 +8,12 @@ from ignite.metrics.metric import Metric, reinit__is_reduced, sync_all_reduce
 __all__ = ["NDCG"]
 
 
+def _get_ranked_items(scores: torch.Tensor, items: torch.Tensor, k: int) -> torch.Tensor:
+    """Get top-k items ranked by scores."""
+    indices = torch.argsort(scores, dim=-1, descending=True, stable=True)[:, :k]
+    return torch.gather(items, dim=-1, index=indices)
+
+
 class NDCG(Metric):
     r"""Calculates the Normalized Discounted Cumulative Gain (NDCG) at `k` for Recommendation Systems.
 
@@ -197,11 +203,7 @@ Relevance Types:
 
         max_k = self.top_k[-1]
 
-        # Get ranked indices based on predictions (stable=True for deterministic tie-breaking)
-        ranked_indices = torch.argsort(y_pred, dim=-1, descending=True, stable=True)[:, :max_k]
-        
-        # Get relevance scores in the predicted ranking order
-        ranked_relevance = torch.gather(y_for_dcg, dim=-1, index=ranked_indices)
+       ranked_relevance = _get_ranked_items(y_pred, y_for_dcg, max_k)
 
         # Compute ideal ranking by sorting true relevance scores
         ideal_relevance = torch.sort(y_for_dcg, dim=-1, descending=True, stable=True)[0][:, :max_k]

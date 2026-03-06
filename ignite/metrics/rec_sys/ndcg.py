@@ -29,6 +29,21 @@ class NDCG(Metric):
     - ``update`` must receive output of the form ``(y_pred, y)``.
     - ``y_pred`` is expected to be raw logits or probability score for each item in the catalog.
     - ``y`` is expected to contain relevance scores (can be binary or graded).
+    ```
+Relevance Types:
+    - **Binary relevance**: Labels are either 0 (not relevant) or 1 (relevant)
+    - **Graded relevance**: Labels can have multiple levels (e.g., 0-4 scale)
+      
+      Common graded scales:
+      - 0: Not relevant
+      - 1: Marginally relevant  
+      - 2: Relevant
+      - 3: Highly relevant
+      - 4: Perfectly relevant
+      
+    The NDCG formula handles both types through the gain function: 2^relevance - 1.
+    Higher relevance scores contribute more to the metric.
+    
     - ``y_pred`` and ``y`` are only allowed shape :math:`(batch, num\_items)`.
     - returns a list of NDCG ordered by the sorted values of ``top_k``.
 

@@ -7,7 +7,10 @@ from ignite.engine import Engine
 from ignite.exceptions import NotComputableError
 from ignite.metrics.rec_sys.ndcg import NDCG
 
-ranx = pytest.importorskip("ranx", reason="ranx is required for reference validation tests")
+try:
+    import ranx
+except ImportError:
+    ranx = None
 
 def ranx_ndcg(
     y_pred: np.ndarray,

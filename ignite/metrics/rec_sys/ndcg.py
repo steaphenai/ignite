@@ -178,7 +178,7 @@ class NDCG(Metric):
             return
 
         # Zero out items below relevance threshold for DCG computation
-        y_for_dcg = torch.where(y >= self.relevance_threshold, y, torch.zeros_like(y))
+        y_for_dcg = torch.where(y >= self.relevance_threshold, y, 0)
 
         max_k = self.top_k[-1]
 

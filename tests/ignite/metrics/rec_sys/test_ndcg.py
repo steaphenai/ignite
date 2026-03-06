@@ -7,10 +7,6 @@ from ignite.engine import Engine
 from ignite.exceptions import NotComputableError
 from ignite.metrics.rec_sys.ndcg import NDCG
 
-try:
-    import ranx
-except ImportError:
-    ranx = None
 
 def ranx_ndcg(
     y_pred: np.ndarray,
@@ -84,18 +80,16 @@ def test_compute(top_k, ignore_zero_hits, available_device):
     metric.update((y_pred, y_true))
     res = metric.compute()
 
+    expected = ranx_ndcg(
+        y_pred.numpy(),
+        y_true.numpy(),
+        top_k,
+        ignore_zero_hits=ignore_zero_hits,
+    )
+
     assert isinstance(res, list)
     assert len(res) == len(top_k)
-    
-    # Validate against ranx if available
-    if ranx is not None:
-        expected = ranx_ndcg(
-            y_pred.numpy(),
-            y_true.numpy(),
-            top_k,
-            ignore_zero_hits=ignore_zero_hits,
-        )
-        np.testing.assert_allclose(res, expected, rtol=1e-5)   
+    np.testing.assert_allclose(res, expected, rtol=1e-5)
 
 
 @pytest.mark.parametrize("num_queries", [10, 100])
@@ -104,9 +98,6 @@ def test_compute(top_k, ignore_zero_hits, available_device):
 @pytest.mark.parametrize("ignore_zero_hits", [True, False])
 def test_compute_vs_ranx(num_queries, num_items, k, ignore_zero_hits, available_device):
     """Verify NDCG matches ranx across a wide range of input shapes and k values."""
-    if ranx is None:
-        pytest.skip("ranx not installed")
-        
     torch.manual_seed(42)
     y_pred = torch.randn(num_queries, num_items)
     y_true = torch.randint(0, 2, (num_queries, num_items)).float()
@@ -148,27 +139,16 @@ def test_all_zeros_relevance():
     y_pred = torch.tensor([[5.0, 3.0, 4.0]])
     y_true = torch.tensor([[0.0, 0.0, 0.0]])
     metric.update((y_pred, y_true))
-    # NDCG should be 0 when there are no relevant items
     assert metric.compute() == pytest.approx([0.0])
 
 
 def test_graded_relevance_threshold():
     """Labels >= relevance_threshold are considered, but contribute their full value to DCG."""
-    # relevance_threshold=2: labels < 2 are zeroed out
     metric = NDCG(top_k=[3], relevance_threshold=2.0)
     
-    # Predictions rank: doc0, doc2, doc1
-    # True relevance: [3, 1, 2] -> After threshold: [3, 0, 2]
-    # Ranked relevance (after threshold): [3, 2, 0]
     y_pred = torch.tensor([[0.9, 0.3, 0.7]])
     y_true = torch.tensor([[3.0, 1.0, 2.0]])
     metric.update((y_pred, y_true))
-    
-    # DCG:  (2^3-1)/log2(2) + (2^2-1)/log2(3) + (2^0-1)/log2(4)
-    #     = 7/1 + 3/1.585 + 0/2 = 7 + 1.893 = 8.893
-    # IDCG: (2^3-1)/log2(2) + (2^2-1)/log2(3) + (2^0-1)/log2(4)
-    #     = 7/1 + 3/1.585 + 0/2 = 8.893
-    # NDCG = 1.0 (perfect ranking of items that meet threshold)
     
     result = metric.compute()
     assert result[0] == pytest.approx(1.0, rel=1e-5)
@@ -177,8 +157,6 @@ def test_graded_relevance_threshold():
 @pytest.mark.usefixtures("distributed")
 class TestDistributed:
     def test_integration(self):
-        if ranx is None:
-            pytest.skip("ranx not installed")
         n_iters = 10
         batch_size = 4
         num_items = 20

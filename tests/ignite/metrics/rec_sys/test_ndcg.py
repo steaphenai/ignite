@@ -7,6 +7,7 @@ from ignite.engine import Engine
 from ignite.exceptions import NotComputableError
 from ignite.metrics.rec_sys.ndcg import NDCG
 
+ranx = pytest.importorskip("ranx", reason="ranx is required for reference validation tests")
 
 def ranx_ndcg(
     y_pred: np.ndarray,
@@ -80,16 +81,18 @@ def test_compute(top_k, ignore_zero_hits, available_device):
     metric.update((y_pred, y_true))
     res = metric.compute()
 
-    expected = ranx_ndcg(
-        y_pred.numpy(),
-        y_true.numpy(),
-        top_k,
-        ignore_zero_hits=ignore_zero_hits,
-    )
-
     assert isinstance(res, list)
     assert len(res) == len(top_k)
-    np.testing.assert_allclose(res, expected, rtol=1e-5)
+    
+    # Validate against ranx if available
+    if ranx is not None:
+        expected = ranx_ndcg(
+            y_pred.numpy(),
+            y_true.numpy(),
+            top_k,
+            ignore_zero_hits=ignore_zero_hits,
+        )
+        np.testing.assert_allclose(res, expected, rtol=1e-5)   
 
 
 @pytest.mark.parametrize("num_queries", [10, 100])
@@ -98,6 +101,9 @@ def test_compute(top_k, ignore_zero_hits, available_device):
 @pytest.mark.parametrize("ignore_zero_hits", [True, False])
 def test_compute_vs_ranx(num_queries, num_items, k, ignore_zero_hits, available_device):
     """Verify NDCG matches ranx across a wide range of input shapes and k values."""
+    if ranx is None:
+        pytest.skip("ranx not installed")
+        
     torch.manual_seed(42)
     y_pred = torch.randn(num_queries, num_items)
     y_true = torch.randint(0, 2, (num_queries, num_items)).float()
@@ -168,6 +174,8 @@ def test_graded_relevance_threshold():
 @pytest.mark.usefixtures("distributed")
 class TestDistributed:
     def test_integration(self):
+        if ranx is None:
+            pytest.skip("ranx not installed")
         n_iters = 10
         batch_size = 4
         num_items = 20

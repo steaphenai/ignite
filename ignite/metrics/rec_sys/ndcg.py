@@ -62,6 +62,12 @@ Relevance Types:
             which handles standard binary labels and graded relevance scales (e.g. TREC-style
             0-4) by treating any label >= 1 as relevant. Items below this threshold contribute
             0 to DCG/IDCG calculations.
+            
+        gain_function (str): Gain function for relevance scores.Options:
+    - ``'exp_rank'``: 2^relevance - 1 (emphasizes high relevance, default)
+    - ``'linear_rank'``: relevance (simpler, linear scale)
+    Defaults to ``'exp_rank'``.
+    
         output_transform: a callable that is used to transform the
             :class:`~ignite.engine.engine.Engine`'s ``process_function``'s output into the
             form expected by the metric.
@@ -138,12 +144,16 @@ Relevance Types:
         top_k: list[int],
         ignore_zero_hits: bool = True,
         relevance_threshold: float = 1.0,
+        gain_function: str = "exp_rank",
         output_transform: Callable = lambda x: x,
         device: str | torch.device = torch.device("cpu"),
         skip_unrolling: bool = False,
     ):
         if any(k <= 0 for k in top_k):
             raise ValueError(" top_k must be list of positive integers only.")
+            
+        if gain_function not in ["exp_rank", "linear_rank"]:
+    raise ValueError("gain_function must be either 'exp_rank' or 'linear_rank'")
 
         self.top_k = sorted(top_k)
         self.ignore_zero_hits = ignore_zero_hits
@@ -173,8 +183,10 @@ Relevance Types:
         positions = torch.arange(1, actual_k + 1, dtype=torch.float32, device=relevance_scores.device)
         discounts = 1.0 / torch.log2(positions + 1)  # log2(i+1) for i in [1, actual_k]
         
-        # Compute gains: 2^rel - 1
-        gains = torch.pow(2.0, relevance_scores[:, :actual_k]) - 1.0
+      if self.gain_function == "exp_rank":
+         gains = torch.pow(2.0, relevance_scores) - 1
+      else:  # linear_rank
+          gains = relevance_scores
         
         # DCG = sum of (gain / discount)
         dcg = (gains * discounts).sum(dim=-1)

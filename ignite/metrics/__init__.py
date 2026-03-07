@@ -107,5 +107,4 @@ __all__ = [
     "coco_tensor_list_to_dict_list",
     "HitRate",
     "MRR",
-    "NDCG",
 ]

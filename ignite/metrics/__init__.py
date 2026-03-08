@@ -105,5 +105,5 @@ __all__ = [
     "CommonObjectDetectionMetrics",
     "coco_tensor_list_to_dict_list",
     "HitRate",
-    "NDGC",
+    "NDCG",
 ]

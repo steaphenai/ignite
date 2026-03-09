@@ -197,7 +197,7 @@ class NDCG(Metric):
         if y.shape[0] == 0:
             return
 
-        y_for_dcg = torch.where(y >= self.relevance_threshold, y, torch.zeros_like(y))
+        y_for_dcg = torch.where(y >= self.relevance_threshold, y, 0)
 
         max_k = self.top_k[-1]
         ranked_relevance = _get_ranked_items(y_pred, y_for_dcg, max_k)

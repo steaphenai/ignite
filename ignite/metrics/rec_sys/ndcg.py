@@ -201,6 +201,11 @@ class NDCG(Metric):
 
         max_k = self.top_k[-1]
         ranked_relevance = _get_ranked_items(y_pred, y_for_dcg, max_k)
+        # Compute ideal ranking by sorting true relevance scores (descending).
+        # This aligns with standard IDCG computation in reference libraries:
+        # ranx: https://github.com/AmenRa/ranx/blob/master/ranx/metrics/ndcg.py#L52
+        # catalyst: https://github.com/catalyst-team/catalyst/blob/master/catalyst/metrics/functional/_ndcg.py#L197
+        
         ideal_relevance = torch.sort(y_for_dcg, dim=-1, descending=True, stable=True)[0][:, :max_k]
 
         for i, k in enumerate(self.top_k):

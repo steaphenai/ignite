@@ -34,7 +34,7 @@ class NDCG(Metric):
 
     - ``update`` must receive output of the form ``(y_pred, y)``.
     - ``y_pred`` is expected to be raw logits or probability score for each item in the catalog.
-    - ``y`` is expected to contain relevance scores (can be binary or graded).
+    - ``y`` is expected to contain relevance scores (can be binary or graded).Expand commentComment on line R37Resolved
 
       Relevance Types:
       - **Binary relevance**: Labels are either 0 (not relevant) or 1 (relevant)
@@ -102,7 +102,7 @@ class NDCG(Metric):
             y_true=torch.Tensor([
                 [0.0, 0.0, 1.0, 1.0],
                 [0.0, 0.0, 0.0, 0.0]
-            ])
+            ])Expand commentComment on line R105Resolved
             state = default_evaluator.run([(y_pred, y_true)])
             print(state.metrics["ndcg"])
 
@@ -137,7 +137,7 @@ class NDCG(Metric):
     required_output_keys = ("y_pred", "y")
     _state_dict_all_req_keys = ("_sum_ndcg_per_k", "_num_examples")
 
-    def __init__(
+    def __init__(Expand commentComment on line R140Resolved
         self,
         top_k: list[int],
         ignore_zero_hits: bool = True,
@@ -197,11 +197,16 @@ class NDCG(Metric):
         if y.shape[0] == 0:
             return
 
-        y_for_dcg = torch.where(y >= self.relevance_threshold, y, torch.zeros_like(y))
+        y_for_dcg = torch.where(y >= self.relevance_threshold, y, 0)
 
         max_k = self.top_k[-1]
         ranked_relevance = _get_ranked_items(y_pred, y_for_dcg, max_k)
-        ideal_relevance = torch.sort(y_for_dcg, dim=-1, descending=True, stable=True)[0][:, :max_k]
+        # Compute ideal ranking by sorting true relevance scores (descending).
+        # This aligns with standard IDCG computation in reference libraries:
+        # ranx: https://github.com/AmenRa/ranx/blob/master/ranx/metrics/ndcg.py#L52
+        # catalyst: https://github.com/catalyst-team/catalyst/blob/master/catalyst/metrics/functional/_ndcg.py#L197
+        
+        ideal_relevance = torch.sort(y_for_dcg, dim=-1, descending=True, stable=True)[0][:, :max_k]Expand commentComment on line R209Resolved
 
         for i, k in enumerate(self.top_k):
             dcg_k = self._compute_dcg(ranked_relevance, k)

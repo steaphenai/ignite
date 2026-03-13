@@ -143,7 +143,7 @@ def test_compute_vs_ranx(num_queries, num_items, k, ignore_zero_hits, available_
     """Verify NDCG matches ranx across a wide range of input shapes and k values."""
     torch.manual_seed(42)
     y_pred = torch.randn(num_queries, num_items)
-    y_true = torch.randint(0, 2, (num_queries, num_items)).float()
+    y_true = torch.randint(0, 5, (num_queries, num_items)).float()
 
     metric = NDCG(
         top_k=[k],

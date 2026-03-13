@@ -17,7 +17,7 @@ def ranx_ndcg(
     gain_function: str = "exp_rank",
 ) -> list[float]:
     """Reference NDCG implementation using ranx for verification. https://github.com/AmenRa/ranx """
-    from ranx import Qrels, Run, evaluate
+    from ranx import Qrels, Run, evaluateExpand commentComment on line R20Resolved
 
     sorted_top_k = sorted(top_k)
     results = []
@@ -56,7 +56,7 @@ def catalyst_ndcg(
 ) -> list[float]:
     """Reference NDCG implementation using catalyst for verification."""
     pytest.importorskip("catalyst", reason="catalyst is required for catalyst parity checks")
-    from catalyst.metrics.functional import ndcg as catalyst_ndcg_fn
+    from catalyst.metrics.functional import ndcg as catalyst_ndcg_fnExpand commentComment on lines R58 to R59Resolved
 
     sorted_top_k = sorted(top_k)
 
@@ -143,7 +143,7 @@ def test_compute_vs_ranx(num_queries, num_items, k, ignore_zero_hits, available_
     """Verify NDCG matches ranx across a wide range of input shapes and k values."""
     torch.manual_seed(42)
     y_pred = torch.randn(num_queries, num_items)
-    y_true = torch.randint(0, 2, (num_queries, num_items)).float()
+    y_true = torch.randint(0, 5, (num_queries, num_items)).float()
 
     metric = NDCG(
         top_k=[k],
@@ -376,3 +376,4 @@ class TestDistributed:
         metric.update((y_pred, y))
 
         assert metric._sum_ndcg_per_k.device == device
+        

@@ -391,7 +391,7 @@ Complete list of metrics
     clustering.DaviesBouldinScore
     clustering.CalinskiHarabaszScore
     rec_sys.HitRate
-    rec_sys.NDGC
+    rec_sys.NDCG
 
 .. note::
 

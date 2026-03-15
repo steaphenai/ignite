@@ -1,3 +1,7 @@
+...
+    For a step-by-step guide on how to use this metric, please refer to the 
+    `NDCG Tutorial <https://github.com/pytorch-ignite/examples/tree/main/tutorials/intermediate/ndcg-metric-tutorial.ipynb>`_.
+    ...
 from typing import Callable
 
 import torch

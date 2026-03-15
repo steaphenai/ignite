@@ -1,7 +1,3 @@
-...
-    For a step-by-step guide on how to use this metric, please refer to the 
-    `NDCG Tutorial <https://github.com/pytorch-ignite/examples/tree/main/tutorials/intermediate/ndcg-metric-tutorial.ipynb>`_.
-    ...
 from typing import Callable
 
 import torch
@@ -20,6 +16,9 @@ def _get_ranked_items(scores: torch.Tensor, items: torch.Tensor, k: int) -> torc
 
 class NDCG(Metric):
     r"""Calculates the Normalized Discounted Cumulative Gain (NDCG) at `k` for Recommendation Systems.
+    
+    For a step-by-step guide on how to use this metric, please refer to the 
+    `NDCG Tutorial <https://github.com/pytorch-ignite/examples/tree/main/tutorials/intermediate/ndcg-metric-tutorial.ipynb>`
 
     NDCG measures the quality of ranking by considering both the relevance of items and their
     positions in the ranked list. It compares the achieved DCG against the ideal DCG (IDCG)

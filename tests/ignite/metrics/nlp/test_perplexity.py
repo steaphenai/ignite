@@ -2,61 +2,23 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+import ignite.distributed as idist
+from ignite.engine import Engine
 from ignite.exceptions import NotComputableError
 from ignite.metrics.nlp import Perplexity
+
+torch.manual_seed(12)
 
 
 def test_zero_sample():
     ppl = Perplexity()
-    ppl.reset()
-    with pytest.raises(NotComputableError):
+    with pytest.raises(NotComputableError, match=r"Perplexity must have at least one example before it can be computed"):
         ppl.compute()
-
-
-def test_compute_matches_manual():
-    torch.manual_seed(42)
-    ppl = Perplexity()
-    ppl.reset()
-
-    y_pred = torch.randn(4, 10, 5)
-    y = torch.randint(0, 10, (4, 5))
-
-    ppl.update((y_pred, y))
-
-    nll_manual = F.cross_entropy(y_pred, y, reduction="sum").item()
-    ppl_manual = torch.exp(torch.tensor(nll_manual / y.numel())).item()
-
-    assert abs(ppl.compute() - ppl_manual) < 1e-4
-
-
-def test_token_weighted_accumulation():
-    """Token-weighted accumulation must differ from naive batch average."""
-    torch.manual_seed(0)
-    ppl = Perplexity()
-    ppl.reset()
-
-    # Two batches with different sequence lengths
-    b1_pred = torch.randn(2, 5, 4)
-    b1_y = torch.randint(0, 5, (2, 4))
-    b2_pred = torch.randn(3, 5, 10)
-    b2_y = torch.randint(0, 5, (3, 10))
-
-    ppl.update((b1_pred, b1_y))
-    ppl.update((b2_pred, b2_y))
-
-    nll1 = F.cross_entropy(b1_pred, b1_y, reduction="sum").item()
-    nll2 = F.cross_entropy(b2_pred, b2_y, reduction="sum").item()
-    total_tokens = b1_y.numel() + b2_y.numel()
-    ppl_ref = torch.exp(torch.tensor((nll1 + nll2) / total_tokens)).item()
-
-    assert abs(ppl.compute() - ppl_ref) < 1e-4
 
 
 def test_invalid_y_pred_shape():
     ppl = Perplexity()
-    ppl.reset()
-
-    with pytest.raises(ValueError, match="y_pred must be at least 2-dimensional"):
+    with pytest.raises(ValueError, match=r"y_pred must be at least 2-dimensional"):
         ppl.update((torch.tensor([1.0, 2.0]), torch.tensor([0])))
 
 
@@ -67,31 +29,141 @@ def test_reset_clears_state():
     y_pred = torch.randn(2, 5, 3)
     y = torch.randint(0, 5, (2, 3))
     ppl.update((y_pred, y))
-
     ppl.reset()
+
     with pytest.raises(NotComputableError):
         ppl.compute()
 
 
-def test_single_token():
+def _reference_perplexity(y_pred, y):
+    """Reference implementation: token-weighted NLL."""
+    nll = F.cross_entropy(y_pred, y, reduction="sum").item()
+    return torch.exp(torch.tensor(nll / y.numel())).item()
+
+
+@pytest.mark.parametrize("n_times", range(3))
+def test_compute_matches_reference(n_times, available_device):
+    ppl = Perplexity(device=available_device)
+    assert ppl._device == torch.device(available_device)
+
+    torch.manual_seed(n_times)
+    y_pred = torch.randn(4, 10, 5)
+    y = torch.randint(0, 10, (4, 5))
+
+    ppl.reset()
+    ppl.update((y_pred, y))
+
+    ref = _reference_perplexity(y_pred, y)
+    assert pytest.approx(ppl.compute(), abs=1e-4) == ref
+
+
+@pytest.mark.parametrize("n_times", range(3))
+def test_token_weighted_accumulation(n_times, available_device):
+    """Token-weighted accumulation across multiple batches."""
+    ppl = Perplexity(device=available_device)
+    assert ppl._device == torch.device(available_device)
+
+    torch.manual_seed(n_times)
+
+    b1_pred = torch.randn(2, 5, 4)
+    b1_y = torch.randint(0, 5, (2, 4))
+    b2_pred = torch.randn(3, 5, 10)
+    b2_y = torch.randint(0, 5, (3, 10))
+
+    ppl.reset()
+    ppl.update((b1_pred, b1_y))
+    ppl.update((b2_pred, b2_y))
+
+    nll1 = F.cross_entropy(b1_pred, b1_y, reduction="sum").item()
+    nll2 = F.cross_entropy(b2_pred, b2_y, reduction="sum").item()
+    total_tokens = b1_y.numel() + b2_y.numel()
+    ppl_ref = torch.exp(torch.tensor((nll1 + nll2) / total_tokens)).item()
+
+    assert pytest.approx(ppl.compute(), abs=1e-4) == ppl_ref
+
+
+def test_accumulator_detached():
+    """Metric state tensors must be detached from the computation graph."""
     ppl = Perplexity()
     ppl.reset()
 
-    y_pred = torch.randn(1, 5, 1)
-    y = torch.randint(0, 5, (1, 1))
+    y_pred = torch.randn(2, 5, 3, requires_grad=True)
+    y = torch.randint(0, 5, (2, 3))
     ppl.update((y_pred, y))
 
-    result = ppl.compute()
-    assert result > 0
-    assert isinstance(result, float)
+    assert not ppl._sum_of_nll.requires_grad
+    assert not ppl._num_tokens.requires_grad
 
 
-def test_accumulator_detached(available_device):
-    ppl = Perplexity(device=available_device)
-    y_pred = torch.randn(4, 6, 3, device=available_device, requires_grad=True)
-    y = torch.randint(0, 6, (4, 3), device=available_device)
+@pytest.mark.distributed
+@pytest.mark.skipif(not idist.has_native_dist_support, reason="Skip if no native dist support")
+@pytest.mark.usefixtures("distributed")
+class TestDistributed:
+    def test_accumulator_device(self):
+        metric_devices = [torch.device("cpu")]
+        device = idist.device()
+        if device.type != "xla":
+            metric_devices.append(device)
 
-    ppl.update((y_pred, y))
+        for metric_device in metric_devices:
+            ppl = Perplexity(device=metric_device)
+            assert ppl._device == metric_device
+            assert ppl._sum_of_nll.device == metric_device, (
+                f"{ppl._sum_of_nll.device} vs {metric_device}"
+            )
 
-    assert ppl._sum_of_nll.requires_grad is False
-    assert ppl._sum_of_nll.is_leaf is True
+            y_pred = torch.randn(2, 5, 3, device=device)
+            y = torch.randint(0, 5, (2, 3), device=device)
+            ppl.update((y_pred, y))
+
+            assert ppl._sum_of_nll.device == metric_device, (
+                f"{ppl._sum_of_nll.device} vs {metric_device}"
+            )
+
+    @pytest.mark.parametrize("n_epochs", [1, 2])
+    def test_integration(self, n_epochs):
+        rank = idist.get_rank()
+        torch.manual_seed(10 + rank)
+
+        n_iters = 20
+        batch_size = 4
+        vocab_size = 10
+        seq_len = 5
+
+        metric_devices = [torch.device("cpu")]
+        device = idist.device()
+        if device.type != "xla":
+            metric_devices.append(device)
+
+        for metric_device in metric_devices:
+            y_true = torch.randint(0, vocab_size, size=(n_iters * batch_size, seq_len)).to(device)
+            y_preds = torch.randn(n_iters * batch_size, vocab_size, seq_len).to(device)
+
+            def update(engine, i):
+                return (
+                    y_preds[i * batch_size: (i + 1) * batch_size],
+                    y_true[i * batch_size: (i + 1) * batch_size],
+                )
+
+            engine = Engine(update)
+            ppl = Perplexity(device=metric_device)
+            ppl.attach(engine, "ppl")
+
+            data = list(range(n_iters))
+            engine.run(data=data, max_epochs=n_epochs)
+
+            y_true_gathered = idist.all_gather(y_true)
+            y_preds_gathered = idist.all_gather(y_preds)
+
+            assert "ppl" in engine.state.metrics
+            res = engine.state.metrics["ppl"]
+
+            # Reference
+            nll = F.cross_entropy(
+                y_preds_gathered,
+                y_true_gathered,
+                reduction="sum"
+            ).item()
+            ref = torch.exp(torch.tensor(nll / y_true_gathered.numel())).item()
+
+            assert pytest.approx(res, abs=1e-4) == ref

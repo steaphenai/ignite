@@ -52,19 +52,6 @@ def test_token_weighted_accumulation():
     assert abs(ppl.compute() - ppl_ref) < 1e-4
 
 
-def test_returns_float():
-    torch.manual_seed(1)
-    ppl = Perplexity()
-    ppl.reset()
-
-    y_pred = torch.randn(2, 5, 3)
-    y = torch.randint(0, 5, (2, 3))
-    ppl.update((y_pred, y))
-
-    result = ppl.compute()
-    assert isinstance(result, float)
-
-
 def test_invalid_y_pred_shape():
     ppl = Perplexity()
     ppl.reset()
@@ -97,3 +84,14 @@ def test_single_token():
     result = ppl.compute()
     assert result > 0
     assert isinstance(result, float)
+
+
+def test_accumulator_detached(available_device):
+    ppl = Perplexity(device=available_device)
+    y_pred = torch.randn(4, 6, 3, device=available_device, requires_grad=True)
+    y = torch.randint(0, 6, (4, 3), device=available_device)
+
+    ppl.update((y_pred, y))
+
+    assert ppl._sum_of_nll.requires_grad is False
+    assert ppl._sum_of_nll.is_leaf is True

@@ -158,12 +158,6 @@ class TestDistributed:
             assert "ppl" in engine.state.metrics
             res = engine.state.metrics["ppl"]
 
-            # Reference
-            nll = F.cross_entropy(
-                y_preds_gathered,
-                y_true_gathered,
-                reduction="sum"
-            ).item()
-            ref = torch.exp(torch.tensor(nll / y_true_gathered.numel())).item()
+            ref = _reference_perplexity(y_preds_gathered, y_true_gathered)
 
             assert pytest.approx(res, abs=1e-4) == ref

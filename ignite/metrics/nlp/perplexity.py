@@ -73,7 +73,9 @@ class Perplexity(Metric):
         self,
         output_transform: Callable = lambda x: x,
         device: str | torch.device = torch.device("cpu"),
+        ignore_index: int = -100,
     ):
+        self._ignore_index = ignore_index
         super().__init__(output_transform=output_transform, device=device)
 
     @reinit__is_reduced
@@ -93,9 +95,9 @@ class Perplexity(Metric):
         if y.ndim < 1:
             raise ValueError(f"y must be at least 1-dimensional (got shape: {y.shape})")
 
-        nll = F.cross_entropy(y_pred, y, reduction="sum")
+        nll = F.cross_entropy(y_pred, y, reduction="sum", ignore_index=self._ignore_index)
         self._sum_of_nll += nll.to(self._device, dtype=torch.double)
-        self._num_tokens += y.numel()
+        self._num_tokens += (y != self._ignore_index).sum()
 
     @sync_all_reduce("_sum_of_nll", "_num_tokens")
     def compute(self) -> float:

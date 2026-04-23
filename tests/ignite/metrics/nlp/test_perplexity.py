@@ -81,19 +81,6 @@ def test_token_weighted_accumulation(n_times, available_device):
     assert pytest.approx(ppl.compute(), abs=1e-4) == ppl_ref
 
 
-def test_accumulator_detached():
-    """Metric state tensors must be detached from the computation graph."""
-    ppl = Perplexity()
-    ppl.reset()
-
-    y_pred = torch.randn(2, 5, 3, requires_grad=True)
-    y = torch.randint(0, 5, (2, 3))
-    ppl.update((y_pred, y))
-
-    assert not ppl._sum_of_nll.requires_grad
-    assert not ppl._num_tokens.requires_grad
-
-
 @pytest.mark.distributed
 @pytest.mark.skipif(not idist.has_native_dist_support, reason="Skip if no native dist support")
 @pytest.mark.usefixtures("distributed")

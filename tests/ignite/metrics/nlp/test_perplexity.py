@@ -12,7 +12,9 @@ torch.manual_seed(12)
 
 def test_zero_sample():
     ppl = Perplexity()
-    with pytest.raises(NotComputableError, match=r"Perplexity must have at least one example before it can be computed"):
+    with pytest.raises(
+        NotComputableError, match=r"Perplexity must have at least one example before it can be computed"
+    ):
         ppl.compute()
 
 
@@ -94,17 +96,13 @@ class TestDistributed:
         for metric_device in metric_devices:
             ppl = Perplexity(device=metric_device)
             assert ppl._device == metric_device
-            assert ppl._sum_of_nll.device == metric_device, (
-                f"{ppl._sum_of_nll.device} vs {metric_device}"
-            )
+            assert ppl._sum_of_nll.device == metric_device, f"{ppl._sum_of_nll.device} vs {metric_device}"
 
             y_pred = torch.randn(2, 5, 3, device=device)
             y = torch.randint(0, 5, (2, 3), device=device)
             ppl.update((y_pred, y))
 
-            assert ppl._sum_of_nll.device == metric_device, (
-                f"{ppl._sum_of_nll.device} vs {metric_device}"
-            )
+            assert ppl._sum_of_nll.device == metric_device, f"{ppl._sum_of_nll.device} vs {metric_device}"
 
     @pytest.mark.parametrize("n_epochs", [1, 2])
     def test_integration(self, n_epochs):
@@ -127,8 +125,8 @@ class TestDistributed:
 
             def update(engine, i):
                 return (
-                    y_preds[i * batch_size: (i + 1) * batch_size],
-                    y_true[i * batch_size: (i + 1) * batch_size],
+                    y_preds[i * batch_size : (i + 1) * batch_size],
+                    y_true[i * batch_size : (i + 1) * batch_size],
                 )
 
             engine = Engine(update)

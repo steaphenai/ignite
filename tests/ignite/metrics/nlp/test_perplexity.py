@@ -37,8 +37,8 @@ def test_reset_clears_state():
 
 def _reference_perplexity(y_pred, y):
     """Reference implementation: token-weighted NLL."""
-    nll = F.cross_entropy(y_pred, y, reduction="sum").item()
-    return torch.exp(torch.tensor(nll / y.numel())).item()
+    nll = F.cross_entropy(y_pred, y, reduction="sum")
+    return torch.exp(nll / y.numel()).item()
 
 
 @pytest.mark.parametrize("n_times", range(3))

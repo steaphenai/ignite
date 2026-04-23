@@ -76,9 +76,10 @@ def test_token_weighted_accumulation(n_times, available_device):
     ppl.update((b1_pred, b1_y))
     ppl.update((b2_pred, b2_y))
 
-    combined_pred = torch.cat([b1_pred, b2_pred], dim=0)
-    combined_y = torch.cat([b1_y, b2_y], dim=0)
-    ppl_ref = _reference_perplexity(combined_pred, combined_y)
+    nll1 = F.cross_entropy(b1_pred, b1_y, reduction="sum").item()
+    nll2 = F.cross_entropy(b2_pred, b2_y, reduction="sum").item()
+    total_tokens = b1_y.numel() + b2_y.numel()
+    ppl_ref = torch.exp(torch.tensor((nll1 + nll2) / total_tokens)).item()
 
     assert pytest.approx(ppl.compute(), abs=1e-4) == ppl_ref
 

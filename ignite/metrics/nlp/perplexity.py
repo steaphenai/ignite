@@ -80,8 +80,8 @@ class Perplexity(Metric):
 
     @reinit__is_reduced
     def reset(self) -> None:
-        self._sum_of_nll = torch.tensor(0.0, dtype=torch.double, device=self._device)
-        self._num_tokens = torch.tensor(0, dtype=torch.long, device=self._device)
+        self._sum_of_nll = torch.tensor(0.0, device=self._device)
+        self._num_tokens = torch.tensor(0, device=self._device)
 
     @reinit__is_reduced
     def update(self, output: tuple[torch.Tensor, torch.Tensor]) -> None:
@@ -96,7 +96,7 @@ class Perplexity(Metric):
             raise ValueError(f"y must be at least 1-dimensional (got shape: {y.shape})")
 
         nll = F.cross_entropy(y_pred, y, reduction="sum", ignore_index=self._ignore_index)
-        self._sum_of_nll += nll.to(self._device, dtype=torch.double)
+        self._sum_of_nll += nll.to(self._device)
         self._num_tokens += (y != self._ignore_index).sum()
 
     @sync_all_reduce("_sum_of_nll", "_num_tokens")
